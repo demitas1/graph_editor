@@ -1,0 +1,12 @@
+{
+  "nodes": [
+    { "id": "1", "x": 100, "y": 100, "label": "Node 1" },
+    { "id": "2", "x": 200, "y": 200, "label": "Node 2" },
+    { "id": "3", "x": 300, "y": 100, "label": "Node 3" }
+  ],
+  "edges": [
+    { "source": "1", "target": "2", "label": "Edge 1-2" },
+    { "source": "2", "target": "3", "label": "Edge 2-3" },
+    { "source": "3", "target": "1", "label": "Edge 3-1" }
+  ]
+}
