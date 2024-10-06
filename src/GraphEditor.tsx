@@ -1,52 +1,39 @@
+// GraphEditor.tsx
 import React, { useState, useEffect, useRef } from 'react';
-
-interface Node {
-  id: string;
-  x: number;
-  y: number;
-  [key: string]: any;
-}
-
-interface Edge {
-  source: string;
-  target: string;
-  [key: string]: any;
-}
-
-interface Graph {
-  nodes: Node[];
-  edges: Edge[];
-}
-
-interface ContextMenu {
-  visible: boolean;
-  x: number;
-  y: number;
-  nodeId: string | null;
-}
-
-interface Transform {
-  x: number;
-  y: number;
-  scale: number;
-}
+import { Node, Edge, Graph, ContextMenu, Transform } from './types';
+import { isValidGraph, isNodeConnected } from './utils';
 
 const GraphEditor: React.FC = () => {
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
-  const [contextMenu, setContextMenu] = useState<ContextMenu>({ visible: false, x: 0, y: 0, nodeId: null });
+  const [contextMenu, setContextMenu] = useState<ContextMenu>(
+    {
+      visible: false,
+      x: 0,
+      y: 0,
+      nodeId: null,
+    }
+  );
   const [edgeOperation, setEdgeOperation] = useState<{ type: 'add' | 'delete', sourceId: string } | null>(null);
-  const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
+  const [transform, setTransform] = useState<Transform>(
+    {
+      x: 0,
+      y: 0,
+      scale: 1,
+    }
+  );
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
 
   useEffect(() => {
     fetch('/graph.json')
       .then(response => response.json())
       .then(data => setGraph(data));
   }, []);
+
 
   const handleNodeClick = (event: React.MouseEvent, nodeId: string) => {
     event.stopPropagation();
@@ -63,6 +50,7 @@ const GraphEditor: React.FC = () => {
       setSelectedNode(nodeId);
     }
   };
+
 
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
     if (selectedNode && !edgeOperation && svgRef.current) {
@@ -84,12 +72,14 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
     if (event.button === 0 && event.target === svgRef.current) {
       setIsDragging(true);
       setDragStart({ x: event.clientX, y: event.clientY });
     }
   };
+
 
   const handleMouseUp = () => {
     setIsDragging(false);
@@ -98,6 +88,7 @@ const GraphEditor: React.FC = () => {
       setSelectedNode(null);
     }
   };
+
 
   const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
     event.preventDefault();
@@ -115,6 +106,7 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const handleContextMenu = (event: React.MouseEvent<SVGSVGElement>) => {
     event.preventDefault();
     if (svgRef.current) {
@@ -130,10 +122,12 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const handleCanvasClick = () => {
     setContextMenu({ visible: false, x: 0, y: 0, nodeId: null });
     setEdgeOperation(null);
   };
+
 
   const addNode = () => {
     const newNode: Node = {
@@ -149,6 +143,7 @@ const GraphEditor: React.FC = () => {
     setContextMenu({ visible: false, x: 0, y: 0, nodeId: null });
   };
 
+
   const deleteNode = () => {
     if (contextMenu.nodeId) {
       setGraph(prevGraph => ({
@@ -161,6 +156,7 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const startAddEdge = () => {
     if (contextMenu.nodeId) {
       setEdgeOperation({ type: 'add', sourceId: contextMenu.nodeId });
@@ -169,6 +165,7 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const startDeleteEdge = () => {
     if (contextMenu.nodeId) {
       setEdgeOperation({ type: 'delete', sourceId: contextMenu.nodeId });
@@ -176,6 +173,7 @@ const GraphEditor: React.FC = () => {
       setSelectedNode(null);
     }
   };
+
 
   const addEdge = (sourceId: string, targetId: string) => {
     if (!graph.edges.some(edge =>
@@ -189,6 +187,7 @@ const GraphEditor: React.FC = () => {
     }
   };
 
+
   const deleteEdge = (sourceId: string, targetId: string) => {
     setGraph(prevGraph => ({
       ...prevGraph,
@@ -198,6 +197,7 @@ const GraphEditor: React.FC = () => {
       )
     }));
   };
+
 
   const loadGraph = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
@@ -219,19 +219,6 @@ const GraphEditor: React.FC = () => {
     }
   };
 
-  const isValidGraph = (graph: any): graph is Graph => {
-    return Array.isArray(graph.nodes) &&
-           Array.isArray(graph.edges) &&
-           graph.nodes.every((node: any) =>
-             typeof node.id === 'string' &&
-             typeof node.x === 'number' &&
-             typeof node.y === 'number'
-           ) &&
-           graph.edges.every((edge: any) =>
-             typeof edge.source === 'string' &&
-             typeof edge.target === 'string'
-           );
-  };
 
   const saveGraph = () => {
     const jsonString = JSON.stringify(graph, null, 2);
@@ -243,13 +230,11 @@ const GraphEditor: React.FC = () => {
     link.click();
   };
 
+
   const triggerFileInput = () => {
     fileInputRef.current?.click();
   };
 
-  const isNodeConnected = (nodeId: string) => {
-    return graph.edges.some(edge => edge.source === nodeId || edge.target === nodeId);
-  };
 
   return (
     <div style={{ position: 'relative', width: '800px', height: '600px', overflow: 'hidden' }}>
@@ -302,7 +287,7 @@ const GraphEditor: React.FC = () => {
             <>
               <button onClick={deleteNode}>Delete Node</button>
               <button onClick={startAddEdge}>Add Edge</button>
-              {isNodeConnected(contextMenu.nodeId) && (
+              {isNodeConnected(graph, contextMenu.nodeId) && (
                 <button onClick={startDeleteEdge}>Delete Edge</button>
               )}
             </>
