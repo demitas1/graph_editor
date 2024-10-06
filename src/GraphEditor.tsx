@@ -25,16 +25,24 @@ interface ContextMenu {
   nodeId: string | null;
 }
 
+interface Transform {
+  x: number;
+  y: number;
+  scale: number;
+}
+
 const GraphEditor: React.FC = () => {
   const [graph, setGraph] = useState<Graph>({ nodes: [], edges: [] });
   const [selectedNode, setSelectedNode] = useState<string | null>(null);
   const [contextMenu, setContextMenu] = useState<ContextMenu>({ visible: false, x: 0, y: 0, nodeId: null });
   const [edgeOperation, setEdgeOperation] = useState<{ type: 'add' | 'delete', sourceId: string } | null>(null);
+  const [transform, setTransform] = useState<Transform>({ x: 0, y: 0, scale: 1 });
+  const [isDragging, setIsDragging] = useState(false);
+  const [dragStart, setDragStart] = useState<{ x: number; y: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    // load default graph for example
     fetch('/graph.json')
       .then(response => response.json())
       .then(data => setGraph(data));
@@ -59,8 +67,8 @@ const GraphEditor: React.FC = () => {
   const handleMouseMove = (event: React.MouseEvent<SVGSVGElement>) => {
     if (selectedNode && !edgeOperation && svgRef.current) {
       const svgRect = svgRef.current.getBoundingClientRect();
-      const x = event.clientX - svgRect.left;
-      const y = event.clientY - svgRect.top;
+      const x = (event.clientX - svgRect.left - transform.x) / transform.scale;
+      const y = (event.clientY - svgRect.top - transform.y) / transform.scale;
 
       setGraph(prevGraph => ({
         ...prevGraph,
@@ -68,12 +76,42 @@ const GraphEditor: React.FC = () => {
           node.id === selectedNode ? { ...node, x, y } : node
         ),
       }));
+    } else if (isDragging && dragStart) {
+      const dx = event.clientX - dragStart.x;
+      const dy = event.clientY - dragStart.y;
+      setTransform(prev => ({ ...prev, x: prev.x + dx, y: prev.y + dy }));
+      setDragStart({ x: event.clientX, y: event.clientY });
+    }
+  };
+
+  const handleMouseDown = (event: React.MouseEvent<SVGSVGElement>) => {
+    if (event.button === 0 && event.target === svgRef.current) {
+      setIsDragging(true);
+      setDragStart({ x: event.clientX, y: event.clientY });
     }
   };
 
   const handleMouseUp = () => {
+    setIsDragging(false);
+    setDragStart(null);
     if (!edgeOperation) {
       setSelectedNode(null);
+    }
+  };
+
+  const handleWheel = (event: React.WheelEvent<SVGSVGElement>) => {
+    event.preventDefault();
+    const scaleFactor = event.deltaY > 0 ? 0.9 : 1.1;
+    const svgRect = svgRef.current?.getBoundingClientRect();
+    if (svgRect) {
+      const mouseX = event.clientX - svgRect.left;
+      const mouseY = event.clientY - svgRect.top;
+      setTransform(prev => {
+        const newScale = prev.scale * scaleFactor;
+        const dx = mouseX - (mouseX - prev.x) * scaleFactor;
+        const dy = mouseY - (mouseY - prev.y) * scaleFactor;
+        return { x: dx, y: dy, scale: newScale };
+      });
     }
   };
 
@@ -81,14 +119,14 @@ const GraphEditor: React.FC = () => {
     event.preventDefault();
     if (svgRef.current) {
       const svgRect = svgRef.current.getBoundingClientRect();
-      const x = event.clientX - svgRect.left;
-      const y = event.clientY - svgRect.top;
+      const x = (event.clientX - svgRect.left - transform.x) / transform.scale;
+      const y = (event.clientY - svgRect.top - transform.y) / transform.scale;
 
       const clickedNode = graph.nodes.find(node =>
-        Math.sqrt(Math.pow(node.x - x, 2) + Math.pow(node.y - y, 2)) < 5
+        Math.sqrt(Math.pow(node.x - x, 2) + Math.pow(node.y - y, 2)) < 5 / transform.scale
       );
 
-      setContextMenu({ visible: true, x, y, nodeId: clickedNode ? clickedNode.id : null });
+      setContextMenu({ visible: true, x: event.clientX, y: event.clientY, nodeId: clickedNode ? clickedNode.id : null });
     }
   };
 
@@ -100,8 +138,8 @@ const GraphEditor: React.FC = () => {
   const addNode = () => {
     const newNode: Node = {
       id: `node-${Date.now()}`,
-      x: contextMenu.x,
-      y: contextMenu.y,
+      x: (contextMenu.x - transform.x) / transform.scale,
+      y: (contextMenu.y - transform.y) / transform.scale,
       label: `New Node ${graph.nodes.length + 1}`
     };
     setGraph(prevGraph => ({
@@ -214,36 +252,40 @@ const GraphEditor: React.FC = () => {
   };
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div style={{ position: 'relative', width: '800px', height: '600px', overflow: 'hidden' }}>
       <svg
         ref={svgRef}
-        width="800"
-        height="600"
+        width="100%"
+        height="100%"
         onMouseMove={handleMouseMove}
+        onMouseDown={handleMouseDown}
         onMouseUp={handleMouseUp}
+        onWheel={handleWheel}
         onContextMenu={handleContextMenu}
         onClick={handleCanvasClick}
       >
-        {graph.edges.map(edge => (
-          <line
-            key={`${edge.source}-${edge.target}`}
-            x1={graph.nodes.find(n => n.id === edge.source)?.x}
-            y1={graph.nodes.find(n => n.id === edge.source)?.y}
-            x2={graph.nodes.find(n => n.id === edge.target)?.x}
-            y2={graph.nodes.find(n => n.id === edge.target)?.y}
-            stroke="black"
-          />
-        ))}
-        {graph.nodes.map(node => (
-          <circle
-            key={node.id}
-            cx={node.x}
-            cy={node.y}
-            r="5"
-            fill={selectedNode === node.id ? 'red' : (edgeOperation && edgeOperation.sourceId === node.id ? 'green' : 'blue')}
-            onMouseDown={(event) => handleNodeClick(event, node.id)}
-          />
-        ))}
+        <g transform={`translate(${transform.x},${transform.y}) scale(${transform.scale})`}>
+          {graph.edges.map(edge => (
+            <line
+              key={`${edge.source}-${edge.target}`}
+              x1={graph.nodes.find(n => n.id === edge.source)?.x}
+              y1={graph.nodes.find(n => n.id === edge.source)?.y}
+              x2={graph.nodes.find(n => n.id === edge.target)?.x}
+              y2={graph.nodes.find(n => n.id === edge.target)?.y}
+              stroke="black"
+            />
+          ))}
+          {graph.nodes.map(node => (
+            <circle
+              key={node.id}
+              cx={node.x}
+              cy={node.y}
+              r={5 / transform.scale}
+              fill={selectedNode === node.id ? 'red' : (edgeOperation && edgeOperation.sourceId === node.id ? 'green' : 'blue')}
+              onMouseDown={(event) => handleNodeClick(event, node.id)}
+            />
+          ))}
+        </g>
       </svg>
       {contextMenu.visible && (
         <div
@@ -269,7 +311,7 @@ const GraphEditor: React.FC = () => {
           )}
         </div>
       )}
-      <div style={{ marginTop: '10px' }}>
+      <div style={{ position: 'absolute', bottom: '10px', left: '10px' }}>
         <input
           type="file"
           ref={fileInputRef}
@@ -281,7 +323,7 @@ const GraphEditor: React.FC = () => {
         <button onClick={saveGraph} style={{ marginLeft: '10px' }}>Save Graph</button>
       </div>
       {edgeOperation && (
-        <div style={{ position: 'fixed', top: 0, left: 0, padding: '10px', background: 'lightyellow' }}>
+        <div style={{ position: 'fixed', top: '10px', left: '10px', padding: '10px', background: 'lightyellow' }}>
           {edgeOperation.type === 'add' ? 'Select a node to add an edge' : 'Select a node to delete the edge'}
         </div>
       )}
